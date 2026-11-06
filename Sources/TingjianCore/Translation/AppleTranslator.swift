@@ -2,37 +2,47 @@ import Foundation
 import Translation
 
 public enum TranslatorError: LocalizedError {
-    case notInstalled
-    case unsupported
+    case notInstalled(SourceLanguage)
+    case unsupported(SourceLanguage)
 
     public var errorDescription: String? {
         switch self {
-        case .notInstalled: "The Chinese → English translation model isn't downloaded. Add it in System Settings › General › Language & Region › Translation Languages."
-        case .unsupported: "Chinese → English translation isn't supported on this Mac."
+        case .notInstalled(let language): "The \(language.displayName) → English translation model isn't downloaded. Add it in System Settings › General › Language & Region › Translation Languages."
+        case .unsupported(let language): "\(language.displayName) → English translation isn't supported on this Mac."
         }
     }
 }
 
-/// `TranslationSession(installedSource:target:)` zh-Hans → en, high-fidelity strategy.
+/// `TranslationSession(installedSource:target:)` → English, high-fidelity strategy.
 public final class AppleTranslator: Translator, @unchecked Sendable {
+    public let language: SourceLanguage
     private let session: TranslationSession
 
-    public init() {
+    public init(language: SourceLanguage) {
+        self.language = language
         session = TranslationSession(
-            installedSource: Languages.translationSource,
-            target: Languages.translationTarget,
+            installedSource: language.translationSource,
+            target: language.translationTarget,
             preferredStrategy: .highFidelity
         )
     }
 
     public func prepare() async throws {
-        let status = await LanguageAvailability().status(from: Languages.translationSource, to: Languages.translationTarget)
+        let status = await LanguageAvailability().status(from: language.translationSource, to: language.translationTarget)
         switch status {
         case .installed: break
-        case .supported: throw TranslatorError.notInstalled
-        default: throw TranslatorError.unsupported
+        case .supported: throw TranslatorError.notInstalled(language)
+        default: throw TranslatorError.unsupported(language)
         }
-        _ = try await session.translate("你好")  // warm up the model
+        _ = try await session.translate(warmUpPhrase)  // load the model
+    }
+
+    private var warmUpPhrase: String {
+        switch language {
+        case .mandarin: "你好"
+        case .spanishLatinAmerica: "Hola"
+        case .french: "Bonjour"
+        }
     }
 
     public func translate(_ text: String) async throws -> String {

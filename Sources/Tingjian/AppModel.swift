@@ -26,15 +26,17 @@ enum SourceMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// What to show above the English line.
-enum ChineseDisplay: String, CaseIterable, Identifiable {
-    case hanzi, pinyin, hidden
+/// What to show above the English line. Pinyin only applies to Mandarin.
+enum OriginalDisplay: String, CaseIterable, Identifiable {
+    case original = "hanzi"
+    case pinyin
+    case hidden
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
-        case .hanzi: "汉字"
+        case .original: "汉字"
         case .pinyin: "Pinyin"
         case .hidden: "Off"
         }
@@ -72,14 +74,28 @@ final class AppModel {
             if sourceMode != oldValue, isListening { Task { await restart() } }
         }
     }
-    var chineseDisplay: ChineseDisplay { didSet { defaults.set(chineseDisplay.rawValue, forKey: Keys.chineseDisplay) } }
+    var language: SourceLanguage {
+        didSet {
+            guard language != oldValue else { return }
+            defaults.set(language.rawValue, forKey: Keys.language)
+            translator = AppleTranslator(language: language)
+            translatorReady = false
+            let wasListening = isListening
+            Task {
+                if wasListening { await stop() }
+                transcript.reconfigure(translator: translator, softSentenceLimit: language.softSentenceLimit)
+                if wasListening { await start() }
+            }
+        }
+    }
+    var originalDisplay: OriginalDisplay { didSet { defaults.set(originalDisplay.rawValue, forKey: Keys.originalDisplay) } }
     var textSize: Double { didSet { defaults.set(textSize, forKey: Keys.textSize) } }
     var visibleLineCount: Int { didSet { defaults.set(visibleLineCount, forKey: Keys.visibleLineCount) } }
 
     // MARK: Private
 
     private let defaults = UserDefaults.standard
-    private let translator: Translator
+    private var translator: Translator
     private var session: ListeningSession?
     private var translatorReady = false
     private var startedAt: Date?
@@ -88,22 +104,26 @@ final class AppModel {
     private enum Keys {
         static let sourceMode = "sourceMode"
         static let showChinese = "showChinese"  // legacy Bool
-        static let chineseDisplay = "chineseDisplay"
+        static let originalDisplay = "chineseDisplay"
+        static let language = "language"
         static let textSize = "textSize"
         static let visibleLineCount = "visibleLineCount"
     }
 
-    init(translator: Translator = AppleTranslator()) {
+    init() {
+        let language = SourceLanguage(rawValue: UserDefaults.standard.string(forKey: Keys.language) ?? "") ?? .mandarin
+        self.language = language
+        let translator = AppleTranslator(language: language)
         self.translator = translator
-        transcript = Transcript(translator: translator)
+        transcript = Transcript(translator: translator, softSentenceLimit: language.softSentenceLimit)
         sourceMode = SourceMode(rawValue: defaults.string(forKey: Keys.sourceMode) ?? "") ?? .system
-        chineseDisplay = ChineseDisplay(rawValue: defaults.string(forKey: Keys.chineseDisplay) ?? "")
-            ?? (defaults.object(forKey: Keys.showChinese) as? Bool == false ? .hidden : .hanzi)
+        originalDisplay = OriginalDisplay(rawValue: defaults.string(forKey: Keys.originalDisplay) ?? "")
+            ?? (defaults.object(forKey: Keys.showChinese) as? Bool == false ? .hidden : .original)
         textSize = defaults.object(forKey: Keys.textSize) as? Double ?? 26
         visibleLineCount = defaults.object(forKey: Keys.visibleLineCount) as? Int ?? 3
         transcript.onLineChange = { line in
             guard line.isFinal else { return }
-            Self.log.info("[\(line.source.rawValue, privacy: .public)] \(line.chinese, privacy: .public) → \(line.english, privacy: .public)")
+            Self.log.info("[\(line.source.rawValue, privacy: .public)] \(line.original, privacy: .public) → \(line.english, privacy: .public)")
         }
     }
 
@@ -125,11 +145,12 @@ final class AppModel {
                 try await translator.prepare()
                 translatorReady = true
             }
-            if !(await FeasibilityReport.run().speechLocaleInstalled) {
-                status = .preparing("Downloading Mandarin speech model…")
-                try await FeasibilityReport.installSpeechAssetsIfNeeded { [weak self] fraction in
+            let language = self.language
+            if !(await FeasibilityReport.run(language: language).speechLocaleInstalled) {
+                status = .preparing("Downloading \(language.displayName) speech model…")
+                try await FeasibilityReport.installSpeechAssetsIfNeeded(for: language) { [weak self] fraction in
                     Task { @MainActor in
-                        self?.status = .preparing("Downloading Mandarin speech model… \(Int(fraction * 100))%")
+                        self?.status = .preparing("Downloading \(language.displayName) speech model… \(Int(fraction * 100))%")
                     }
                 }
             }
@@ -140,7 +161,7 @@ final class AppModel {
                 case .microphone: MicrophoneSource()
                 }
             }
-            let session = ListeningSession(sources: sources, transcript: transcript) { AppleSpeechRecognizer() }
+            let session = ListeningSession(sources: sources, transcript: transcript) { AppleSpeechRecognizer(language: language) }
             session.onLevel = { [weak self] _, rms in self?.receiveLevel(rms) }
             session.onError = { [weak self] error in
                 guard let self else { return }
@@ -153,7 +174,7 @@ final class AppModel {
             loudestSinceStart = 0
             hearingOnlySilence = false
             status = .listening
-            Self.log.info("listening (\(self.sourceMode.rawValue, privacy: .public))")
+            Self.log.info("listening (\(self.sourceMode.rawValue, privacy: .public), \(language.rawValue, privacy: .public))")
         } catch {
             Self.log.error("start failed: \(error.localizedDescription, privacy: .public)")
             status = .failed(error.localizedDescription)
@@ -190,13 +211,13 @@ final class AppModel {
 
     func copyAll() {
         let text = transcript.finalLines
-            .map { "\($0.chinese)\n\($0.english)" }
+            .map { "\($0.original)\n\($0.english)" }
             .joined(separator: "\n\n")
         copy(text)
     }
 
     func copy(_ line: Transcript.Line) {
-        copy("\(line.chinese)\n\(line.english)")
+        copy("\(line.original)\n\(line.english)")
     }
 
     private func copy(_ text: String) {

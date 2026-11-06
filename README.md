@@ -1,6 +1,6 @@
 # tingjian 听见
 
-A personal macOS menu bar app that listens to everything (system audio, plus the mic if enabled) and shows live **Mandarin → English** translation in a sleek floating overlay. Everything runs **locally**.
+A personal macOS menu bar app that listens to everything (system audio, plus the mic if enabled) and shows live translation into English from **Mandarin**, **Spanish (Latin America)** or **French** (picked in the menu) in a sleek floating overlay. Everything runs **locally**.
 
 ## Stack
 
@@ -23,7 +23,7 @@ A personal macOS menu bar app that listens to everything (system audio, plus the
 - Menu bar icon pulses while listening.
 - Overlay sits at the bottom center: big English line, small Chinese above it, older lines fade out. The live line is dim and turns solid when final.
 - Drag to move; the overlay remembers its position.
-- Menu: source (system / mic / both), Chinese line as 汉字 / pinyin / off, session history (copyable).
+- Menu: source (system / mic / both), original line on or off (Mandarin: 汉字 / pinyin / off), session history (copyable).
 - Drag: hold ⌘ over the subtitles and drag.
 
 ## Build & run
@@ -57,16 +57,16 @@ No Accessibility or Screen Recording permission is needed; the hotkey uses Carbo
 `RegisterEventHotKey`. If the overlay only says "Only silence so far" while audio is
 playing, the System Audio Recording grant is missing.
 
-Models (on-device, one-time): the zh-CN speech model downloads automatically on first
-start. The zh-Hans → en translation model must be installed under System Settings ›
+Models (on-device, one-time): the speech model for the selected language (zh-CN, es-MX, fr-FR) downloads
+automatically on first start. The translation model (zh-Hans, es, fr → en) must be installed under System Settings ›
 General › Language & Region › Translation Languages.
 
 ### CLI
 
-`swift run tingjian-cli <command>` runs the same pipeline headless:
+`swift run tingjian-cli [--lang zh|es|fr] <command>` runs the same pipeline headless:
 
-- `check`: whether the zh-CN transcriber and the zh-Hans → en translation are installed.
-- `install`: downloads the zh-CN speech model.
+- `check`: whether the language's transcriber and its → en translation are installed.
+- `install`: downloads the language's speech model.
 - `file <audio>`: plays a file through ASR and translation in real time.
 - `tap [s]` / `mic [s]`: live capture.
 

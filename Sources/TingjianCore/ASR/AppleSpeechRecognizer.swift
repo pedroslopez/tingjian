@@ -3,23 +3,27 @@ import Speech
 
 public enum RecognizerError: LocalizedError {
     case noCompatibleFormat
-    case localeUnsupported
+    case localeUnsupported(SourceLanguage)
 
     public var errorDescription: String? {
         switch self {
         case .noCompatibleFormat: "The speech model didn't report a usable audio format."
-        case .localeUnsupported: "Mandarin (zh-CN) speech recognition isn't supported on this Mac."
+        case .localeUnsupported(let language): "\(language.displayName) speech recognition isn't supported on this Mac."
         }
     }
 }
 
-/// `SpeechAnalyzer` + `SpeechTranscriber` (zh-CN) with volatile results.
+/// `SpeechAnalyzer` + `SpeechTranscriber` with volatile results.
 public final class AppleSpeechRecognizer: SpeechRecognizer, @unchecked Sendable {
-    public init() {}
+    public let language: SourceLanguage
 
-    static func makeTranscriber() -> SpeechTranscriber {
+    public init(language: SourceLanguage) {
+        self.language = language
+    }
+
+    static func makeTranscriber(_ language: SourceLanguage) -> SpeechTranscriber {
         SpeechTranscriber(
-            locale: Languages.speechLocale,
+            locale: language.speechLocale,
             transcriptionOptions: [],
             reportingOptions: [.volatileResults, .fastResults],
             attributeOptions: []
@@ -27,22 +31,23 @@ public final class AppleSpeechRecognizer: SpeechRecognizer, @unchecked Sendable 
     }
 
     public func prepare() async throws -> AVAudioFormat {
-        guard await SpeechTranscriber.supportedLocale(equivalentTo: Languages.speechLocale) != nil else {
-            throw RecognizerError.localeUnsupported
+        guard await SpeechTranscriber.supportedLocale(equivalentTo: language.speechLocale) != nil else {
+            throw RecognizerError.localeUnsupported(language)
         }
-        try await FeasibilityReport.installSpeechAssetsIfNeeded()
-        _ = try? await AssetInventory.reserve(locale: Languages.speechLocale)
-        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Self.makeTranscriber()]) else {
+        try await FeasibilityReport.installSpeechAssetsIfNeeded(for: language)
+        _ = try? await AssetInventory.reserve(locale: language.speechLocale)
+        guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [Self.makeTranscriber(language)]) else {
             throw RecognizerError.noCompatibleFormat
         }
         return format
     }
 
     public func transcribe(_ audio: AsyncStream<AVAudioPCMBuffer>) -> AsyncThrowingStream<TranscriptUpdate, Error> {
-        AsyncThrowingStream { continuation in
+        let language = self.language
+        return AsyncThrowingStream { continuation in
             let task = Task {
                 do {
-                    let transcriber = Self.makeTranscriber()
+                    let transcriber = Self.makeTranscriber(language)
                     let analyzer = SpeechAnalyzer(
                         modules: [transcriber],
                         options: .init(priority: .userInitiated, modelRetention: .processLifetime)

@@ -14,9 +14,9 @@ public final class Transcript {
         public let id: UUID
         public let source: SourceKind
         public let startedAt: Date
-        public var chinese: String
+        public var original: String
         public var english: String
-        /// The recognizer committed the Chinese text.
+        /// The recognizer committed the original text.
         public var isCommitted: Bool
         /// Committed and the definitive translation has arrived.
         public var isFinal: Bool
@@ -33,7 +33,8 @@ public final class Transcript {
     /// Called whenever a line changes (for logging / the CLI).
     @ObservationIgnored public var onLineChange: ((Line) -> Void)?
 
-    @ObservationIgnored private let translator: Translator
+    @ObservationIgnored private var translator: Translator
+    @ObservationIgnored public var softSentenceLimit: Int
     /// Live line ids per source, in order; the last one is the growing tail.
     @ObservationIgnored private var live: [SourceKind: [UUID]] = [:]
     @ObservationIgnored private var partials: [UUID: PartialState] = [:]
@@ -45,8 +46,20 @@ public final class Transcript {
         var dirty = false
     }
 
-    public init(translator: Translator) {
+    public init(translator: Translator, softSentenceLimit: Int = 36) {
         self.translator = translator
+        self.softSentenceLimit = softSentenceLimit
+    }
+
+    /// Switches language. Keeps finished lines; drops anything in flight.
+    public func reconfigure(translator: Translator, softSentenceLimit: Int) {
+        self.translator = translator
+        self.softSentenceLimit = softSentenceLimit
+        let open = Set(live.values.flatMap { $0 })
+        lines.removeAll { open.contains($0.id) }
+        live.removeAll()
+        partials.removeAll()
+        cache = TranslationCache()
     }
 
     public var finalLines: [Line] { lines.filter(\.isFinal) }
@@ -61,7 +74,7 @@ public final class Transcript {
     // MARK: - Recognizer input
 
     public func apply(_ update: TranscriptUpdate, from source: SourceKind) {
-        let sentences = Segmenter.sentences(update.text)
+        let sentences = Segmenter.sentences(update.text, softLimit: softSentenceLimit)
         var ids = live[source] ?? []
 
         // Reconcile sentences onto the existing live lines.
@@ -69,13 +82,13 @@ public final class Transcript {
         for (k, sentence) in sentences.enumerated() {
             if k < ids.count {
                 guard let i = index(of: ids[k]) else { continue }
-                if lines[i].chinese != sentence {
-                    lines[i].chinese = sentence
+                if lines[i].original != sentence {
+                    lines[i].original = sentence
                     if let cached = cache[sentence] { lines[i].english = cached }
                     changed.append(ids[k])
                 }
             } else {
-                ids.append(newLine(for: source, chinese: sentence))
+                ids.append(newLine(for: source, original: sentence))
                 changed.append(ids.last!)
             }
         }
@@ -94,7 +107,7 @@ public final class Transcript {
                 guard let i = index(of: id) else { continue }
                 lines[i].isCommitted = true
                 notify(i)
-                let text = lines[i].chinese
+                let text = lines[i].original
                 Task { await translateFinal(id: id, text: text) }
             }
         } else {
@@ -114,7 +127,7 @@ public final class Transcript {
                 partials[id] = nil
                 guard let i = index(of: id) else { continue }
                 lines[i].isCommitted = true
-                let text = lines[i].chinese
+                let text = lines[i].original
                 Task { await translateFinal(id: id, text: text) }
             }
         }
@@ -153,7 +166,7 @@ public final class Transcript {
         if state.scheduled { return }
         state.scheduled = true
         // Cached sentences resolve instantly; no need to wait.
-        let delay = index(of: id).flatMap { cache[lines[$0].chinese] } != nil ? .zero : partialInterval
+        let delay = index(of: id).flatMap { cache[lines[$0].original] } != nil ? .zero : partialInterval
         Task {
             if delay > .zero { try? await Task.sleep(for: delay) }
             await runPartial(id)
@@ -167,7 +180,7 @@ public final class Transcript {
         state.dirty = false
         partials[id] = state
 
-        let text = lines[i].chinese
+        let text = lines[i].original
         let english = try? await translate(text)
 
         guard partials[id] != nil, let j = index(of: id), !lines[j].isCommitted else { return }
@@ -184,9 +197,9 @@ public final class Transcript {
 
     // MARK: - Helpers
 
-    private func newLine(for source: SourceKind, chinese: String) -> UUID {
-        let line = Line(id: UUID(), source: source, startedAt: .now, chinese: chinese,
-                        english: cache[chinese] ?? "", isCommitted: false, isFinal: false)
+    private func newLine(for source: SourceKind, original: String) -> UUID {
+        let line = Line(id: UUID(), source: source, startedAt: .now, original: original,
+                        english: cache[original] ?? "", isCommitted: false, isFinal: false)
         lines.append(line)
         if lines.count > maxLines { lines.removeFirst(lines.count - maxLines) }
         return line.id

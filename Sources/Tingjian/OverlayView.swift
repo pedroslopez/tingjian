@@ -1,7 +1,7 @@
 import SwiftUI
 import TingjianCore
 
-/// Subtitle stack: small Chinese above large English, newest at the bottom,
+/// Subtitle stack: small original text above large English, newest at the bottom,
 /// older lines fading out, live lines dim until final.
 struct OverlayView: View {
     let model: AppModel
@@ -37,7 +37,9 @@ struct OverlayView: View {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
                     SubtitleLine(
                         line: line,
-                        chineseDisplay: model.chineseDisplay,
+                        display: model.language.supportsRomanization || model.originalDisplay == .hidden
+                            ? model.originalDisplay : .original,
+                        isLatin: !model.language.supportsRomanization,
                         textSize: model.textSize,
                         age: lines.count - 1 - index
                     )
@@ -92,7 +94,9 @@ struct OverlayView: View {
 
 private struct SubtitleLine: View {
     let line: Transcript.Line
-    let chineseDisplay: ChineseDisplay
+    let display: OriginalDisplay
+    /// Latin-script source text runs longer than Hanzi; give it room.
+    let isLatin: Bool
     let textSize: Double
     /// 0 = newest.
     let age: Int
@@ -101,9 +105,9 @@ private struct SubtitleLine: View {
         VStack(spacing: 3) {
             if let source = sourceText {
                 Text(source)
-                    .font(.system(size: textSize * (chineseDisplay == .pinyin ? 0.56 : 0.6), weight: .medium))
+                    .font(.system(size: textSize * (display == .pinyin || isLatin ? 0.56 : 0.6), weight: .medium))
                     .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(chineseDisplay == .pinyin ? 2 : 1)
+                    .lineLimit(display == .pinyin || isLatin ? 2 : 1)
                     .truncationMode(.head)
             }
             Text(line.english.isEmpty ? "…" : line.english)
@@ -122,9 +126,9 @@ private struct SubtitleLine: View {
     }
 
     private var sourceText: String? {
-        switch chineseDisplay {
-        case .hanzi: line.chinese
-        case .pinyin: Pinyin.romanize(line.chinese)
+        switch display {
+        case .original: line.original
+        case .pinyin: Pinyin.romanize(line.original)
         case .hidden: nil
         }
     }

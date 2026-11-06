@@ -7,6 +7,7 @@ import Translation
 public struct FeasibilityReport: Sendable, CustomStringConvertible {
     public enum TranslationStatus: String, Sendable { case installed, supported, unsupported }
 
+    public var language: SourceLanguage
     public var transcriberAvailable: Bool
     public var speechLocaleSupported: Bool
     public var speechLocaleInstalled: Bool
@@ -20,27 +21,34 @@ public struct FeasibilityReport: Sendable, CustomStringConvertible {
 
     public var description: String {
         """
+        Language                             \(language.displayName)
         SpeechTranscriber.isAvailable        \(transcriberAvailable)
-        zh-CN in supportedLocales            \(speechLocaleSupported)
-        zh-CN in installedLocales            \(speechLocaleInstalled)
-        zh-CN asset status                   \(speechAssetStatus)
-        Translation zh-Hans → en             \(translationStatus.rawValue)
+        \(pad(tag + " in supportedLocales"))\(speechLocaleSupported)
+        \(pad(tag + " in installedLocales"))\(speechLocaleInstalled)
+        \(pad(tag + " asset status"))\(speechAssetStatus)
+        \(pad("Translation " + language.translationSource.minimalIdentifier + " → en"))\(translationStatus.rawValue)
         Analyzer audio format                \(analyzerFormat ?? "n/a")
         Ready                                \(isReady)
         """
     }
 
-    public static func run() async -> FeasibilityReport {
-        let locale = Languages.speechLocale
+    private var tag: String { language.speechLocale.identifier(.bcp47) }
+
+    private func pad(_ s: String) -> String {
+        s.padding(toLength: max(37, s.count + 1), withPad: " ", startingAt: 0)
+    }
+
+    public static func run(language: SourceLanguage = .mandarin) async -> FeasibilityReport {
+        let locale = language.speechLocale
         let tag = locale.identifier(.bcp47)
         let supported = await SpeechTranscriber.supportedLocales.contains { $0.identifier(.bcp47) == tag }
         let installed = await SpeechTranscriber.installedLocales.contains { $0.identifier(.bcp47) == tag }
-        let transcriber = AppleSpeechRecognizer.makeTranscriber()
+        let transcriber = AppleSpeechRecognizer.makeTranscriber(language)
         let assetStatus = await AssetInventory.status(forModules: [transcriber])
         let format = await SpeechAnalyzer.bestAvailableAudioFormat(compatibleWith: [transcriber])
 
         let availability = LanguageAvailability()
-        let status = await availability.status(from: Languages.translationSource, to: Languages.translationTarget)
+        let status = await availability.status(from: language.translationSource, to: language.translationTarget)
         let translation: TranslationStatus = switch status {
         case .installed: .installed
         case .supported: .supported
@@ -48,6 +56,7 @@ public struct FeasibilityReport: Sendable, CustomStringConvertible {
         }
 
         return FeasibilityReport(
+            language: language,
             transcriberAvailable: SpeechTranscriber.isAvailable,
             speechLocaleSupported: supported,
             speechLocaleInstalled: installed,
@@ -57,9 +66,9 @@ public struct FeasibilityReport: Sendable, CustomStringConvertible {
         )
     }
 
-    /// Downloads the zh-CN speech model if it isn't installed yet.
-    public static func installSpeechAssetsIfNeeded(progress: (@Sendable (Double) -> Void)? = nil) async throws {
-        let transcriber = AppleSpeechRecognizer.makeTranscriber()
+    /// Downloads the language's speech model if it isn't installed yet.
+    public static func installSpeechAssetsIfNeeded(for language: SourceLanguage, progress: (@Sendable (Double) -> Void)? = nil) async throws {
+        let transcriber = AppleSpeechRecognizer.makeTranscriber(language)
         guard let request = try await AssetInventory.assetInstallationRequest(supporting: [transcriber]) else { return }
         let observation = progress.map { cb in
             request.progress.observe(\.fractionCompleted) { p, _ in cb(p.fractionCompleted) }

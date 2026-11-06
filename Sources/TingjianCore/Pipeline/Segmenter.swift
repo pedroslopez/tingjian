@@ -33,18 +33,22 @@ public enum Segmenter {
         while let c = pending {
             current.append(c)
             pending = chars.next()
-            if terminators.contains(c) {
+            // A Latin full stop ends a sentence only before a space or the end,
+            // so "3.5" and "U.S.A" stay intact.
+            let isFullStop = c == "." && (pending == nil || pending!.isWhitespace)
+            if terminators.contains(c) || isFullStop {
                 // Keep runs like "？！" and closing quotes with the sentence.
                 while let p = pending, terminators.contains(p) || closers.contains(p) {
                     current.append(p)
                     pending = chars.next()
                 }
-                result.append(contentsOf: softSplit(current, limit: softLimit))
+                result.append(contentsOf: softSplit(current.trimmingCharacters(in: .whitespaces), limit: softLimit))
                 current = ""
             }
         }
-        if !current.isEmpty { result.append(contentsOf: softSplit(current, limit: softLimit)) }
-        return result.filter { !$0.allSatisfy { $0.isWhitespace || terminators.contains($0) } }
+        let tail = current.trimmingCharacters(in: .whitespaces)
+        if !tail.isEmpty { result.append(contentsOf: softSplit(tail, limit: softLimit)) }
+        return result.filter { !$0.allSatisfy { $0.isWhitespace || terminators.contains($0) || $0 == "." } }
     }
 
     private static func softSplit(_ sentence: String, limit: Int) -> [String] {
@@ -56,7 +60,7 @@ public enum Segmenter {
             guard let cut = window.lastIndex(where: commas.contains),
                   rest.distance(from: rest.startIndex, to: cut) >= limit / 3 else { break }
             parts.append(String(rest[...cut]))
-            rest = rest[rest.index(after: cut)...]
+            rest = rest[rest.index(after: cut)...].drop(while: \.isWhitespace)
         }
         if !rest.isEmpty { parts.append(String(rest)) }
         return parts

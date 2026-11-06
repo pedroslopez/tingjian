@@ -118,14 +118,34 @@ struct MenuView: View {
                 .frame(width: 190)
             }
             HStack {
-                Text("Chinese")
+                Text("Language")
                 Spacer()
-                Picker("Chinese", selection: $model.chineseDisplay) {
-                    ForEach(ChineseDisplay.allCases) { Text($0.label).tag($0) }
+                Picker("Language", selection: $model.language) {
+                    ForEach(SourceLanguage.allCases) { Text($0.displayName).tag($0) }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.menu)
                 .labelsHidden()
-                .frame(width: 190)
+                .fixedSize()
+            }
+            HStack {
+                Text(model.language.nativeName)
+                Spacer()
+                if model.language.supportsRomanization {
+                    Picker("Original", selection: $model.originalDisplay) {
+                        ForEach(OriginalDisplay.allCases) { Text($0.label).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 190)
+                } else {
+                    Picker("Original", selection: showOriginal) {
+                        Text("Show").tag(true)
+                        Text("Off").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 126)
+                }
             }
             HStack {
                 Text("Lines")
@@ -144,6 +164,14 @@ struct MenuView: View {
             }
         }
         .font(.system(size: 12))
+    }
+
+    /// For languages without romanization: show / hide the original line.
+    private var showOriginal: Binding<Bool> {
+        Binding(
+            get: { model.originalDisplay != .hidden },
+            set: { model.originalDisplay = $0 ? .original : .hidden }
+        )
     }
 
     // MARK: History
@@ -192,8 +220,10 @@ struct MenuView: View {
     /// Rough row height so short histories don't get a big empty scroll area.
     private static func estimatedHeight(_ line: Transcript.Line) -> CGFloat {
         let englishLines = max(1, (line.english.count + 43) / 44)
-        let chineseLines = max(1, (line.chinese.count + 23) / 24)
-        return 14 + CGFloat(englishLines) * 15.5 + CGFloat(chineseLines) * 14.5
+        let isCJK = line.original.unicodeScalars.contains { (0x3400...0x9FFF).contains($0.value) }
+        let perLine = isCJK ? 24 : 46
+        let originalLines = max(1, (line.original.count + perLine - 1) / perLine)
+        return 14 + CGFloat(englishLines) * 15.5 + CGFloat(originalLines) * 14.5
     }
 
     private func flash(_ flag: Binding<Bool>) {
@@ -233,7 +263,7 @@ private struct HistoryRow: View {
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(line.english).font(.system(size: 12)).foregroundStyle(.primary)
-                    Text(line.chinese).font(.system(size: 11)).foregroundStyle(.secondary)
+                    Text(line.original).font(.system(size: 11)).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .multilineTextAlignment(.leading)
