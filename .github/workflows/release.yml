@@ -94,7 +94,7 @@ jobs:
 
       - name: Upload artifact (dry run)
         if: inputs.dry_run
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: tingjian-${{ steps.version.outputs.version }}
           path: |
