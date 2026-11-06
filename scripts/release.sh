@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Tags the next version and pushes the tag, which triggers the Release workflow.
 #
-#   scripts/release.sh patch        0.2.0 → 0.2.1
+#   scripts/release.sh patch        0.2.0 → 0.2.1 (0.3.0-beta → 0.3.0)
 #   scripts/release.sh minor        0.2.1 → 0.3.0
 #   scripts/release.sh major        0.3.0 → 1.0.0
 #   scripts/release.sh 0.4.0-beta   an explicit version
@@ -39,7 +39,9 @@ BASE=${${LAST:-0.0.0}%%-*}   # drop any pre-release suffix
 IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
 
 case $BUMP in
-  patch) NEXT="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+  patch)
+    # After a pre-release (0.3.0-beta), "patch" ships it as 0.3.0.
+    if [[ $LAST == *-* ]]; then NEXT=$BASE; else NEXT="$MAJOR.$MINOR.$((PATCH + 1))"; fi ;;
   minor) NEXT="$MAJOR.$((MINOR + 1)).0" ;;
   major) NEXT="$((MAJOR + 1)).0.0" ;;
   *)
