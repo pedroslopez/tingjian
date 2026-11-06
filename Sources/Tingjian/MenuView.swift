@@ -175,10 +175,17 @@ struct MenuView: View {
                         }
                     }
                 }
-                .frame(height: min(240, CGFloat(lines.count) * 52))
+                .frame(height: min(260, lines.reduce(0) { $0 + Self.estimatedHeight($1) }))
                 .scrollIndicators(.automatic)
             }
         }
+    }
+
+    /// Rough row height so short histories don't get a big empty scroll area.
+    private static func estimatedHeight(_ line: Transcript.Line) -> CGFloat {
+        let englishLines = max(1, (line.english.count + 43) / 44)
+        let chineseLines = max(1, (line.chinese.count + 23) / 24)
+        return 14 + CGFloat(englishLines) * 15.5 + CGFloat(chineseLines) * 14.5
     }
 
     private func flash(_ flag: Binding<Bool>) {

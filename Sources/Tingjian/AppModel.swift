@@ -148,6 +148,7 @@ final class AppModel {
         self.session = nil
         if !keepStatus { status = .idle }
         await session?.stop()
+        if session != nil { Self.log.info("stopped") }
         level = 0
         hearingOnlySilence = false
     }
