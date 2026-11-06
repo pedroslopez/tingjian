@@ -19,7 +19,12 @@ done
 
 BUNDLE_ID="com.pedroslopez.tingjian"
 APP="build/tingjian.app"
-VERSION="0.1.0"
+# Version: $VERSION, else the latest v* tag, else 0.1.0.
+if [[ -z "${VERSION:-}" ]]; then
+  VERSION=$(git describe --tags --match 'v*' --abbrev=0 2>/dev/null || true)
+  VERSION=${VERSION#v}
+  VERSION=${VERSION:-0.1.0}
+fi
 BUILD_NUMBER=$(git rev-list --count HEAD 2>/dev/null || echo 1)
 
 swift build -c "$CONFIG" --product tingjian

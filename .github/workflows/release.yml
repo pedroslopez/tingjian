@@ -1,0 +1,133 @@
+name: Release
+
+# Builds tingjian.app on a macOS runner, signs it with the stable self-signed
+# identity (secret SIGNING_P12_BASE64, see scripts/make-signing-identity.sh) and
+# attaches the zipped app to a GitHub release.
+#
+#   git tag v0.2.0 && git push origin v0.2.0      release that tag
+#   Actions › Release › Run workflow               release / dry-run any commit
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, e.g. 0.2.0 (tags v<version> on the selected branch's head)"
+        required: true
+      dry_run:
+        description: "Build and upload a workflow artifact only; don't publish a release"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # bundle.sh uses the commit count as the build number
+
+      - name: Resolve version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="v${INPUT_VERSION#v}"
+          fi
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]] || { echo "::error::bad version '$TAG'"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Select Xcode (needs the macOS 26.4+ SDK)
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          SDK=$(xcrun --sdk macosx --show-sdk-version)
+          echo "Using $XCODE, macOS SDK $SDK"
+          if [[ "$(printf '%s\n' 26.4 "$SDK" | sort -V | head -1)" != 26.4 ]]; then
+            echo "::error::macOS SDK 26.4 or newer is required, found $SDK"
+            exit 1
+          fi
+          swift --version
+
+      - name: Install signing identity
+        env:
+          SIGNING_P12_BASE64: ${{ secrets.SIGNING_P12_BASE64 }}
+        run: |
+          if [[ -z "$SIGNING_P12_BASE64" ]]; then
+            echo "::warning::SIGNING_P12_BASE64 isn't set; the app will be signed ad hoc and privacy grants won't carry over"
+            exit 0
+          fi
+          echo "$SIGNING_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/identity.p12"
+          scripts/make-signing-identity.sh --import "$RUNNER_TEMP/identity.p12"
+          rm -f "$RUNNER_TEMP/identity.p12"
+
+      - name: Build
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          scripts/bundle.sh
+          codesign --verify --strict --verbose=2 build/tingjian.app
+
+      - name: Package
+        id: package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          cd build
+          ZIP="tingjian-$VERSION-macos-arm64.zip"
+          ditto -c -k --sequesterRsrc --keepParent tingjian.app "$ZIP"
+          shasum -a 256 "$ZIP" > "$ZIP.sha256"
+          cat "$ZIP.sha256"
+          echo "zip=build/$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact (dry run)
+        if: inputs.dry_run
+        uses: actions/upload-artifact@v4
+        with:
+          name: tingjian-${{ steps.version.outputs.version }}
+          path: |
+            ${{ steps.package.outputs.zip }}
+            ${{ steps.package.outputs.zip }}.sha256
+
+      - name: Publish release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+          ZIP: ${{ steps.package.outputs.zip }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<NOTES
+          ## Install
+
+          1. Download \`$(basename "$ZIP")\` and unzip it.
+          2. Move **tingjian.app** to /Applications and open it. It lives in the menu bar (⌥⌘T toggles listening).
+          3. The app is self-signed, not notarized, so macOS blocks the first launch of a browser download.
+             Allow it under System Settings › Privacy & Security › *Open Anyway*, or run
+             \`xattr -dr com.apple.quarantine /Applications/tingjian.app\`.
+             (\`gh release download\` doesn't add the quarantine flag.)
+
+          Requires macOS 26.4+ on Apple silicon. The signing identity is stable, so permission grants
+          carry over when you replace an older build.
+          NOTES
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$ZIP.sha256" --clobber
+          else
+            gh release create "$TAG" "$ZIP" "$ZIP.sha256" \
+              --title "tingjian $VERSION" \
+              --notes-file "$RUNNER_TEMP/notes.md" \
+              --generate-notes \
+              --target "$GITHUB_SHA"
+          fi

@@ -77,6 +77,30 @@ privacy grants survive rebuilds. Without the identity it falls back to ad hoc
 signing, which resets grants on every build. Regenerate the app icon with
 `swift scripts/make-icon.swift`.
 
+### Releases
+
+`.github/workflows/release.yml` builds the app on a macOS runner and attaches
+`tingjian-<version>-macos-arm64.zip` (plus its SHA-256) to a GitHub release:
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0
+```
+
+Or use *Actions › Release › Run workflow* with a version. Tick *dry run* there to only build
+and upload the zip as a workflow artifact.
+
+CI signs with the same self-signed identity as local builds, so permission grants carry over
+between releases. It reads the identity from the `SIGNING_P12_BASE64` secret. To replace the
+identity, run `scripts/make-signing-identity.sh --force`, which saves a new `.p12` under
+`~/Library/Application Support/tingjian/`, then update the secret:
+
+```sh
+base64 -i ~/Library/Application\ Support/tingjian/signing-identity.p12 | gh secret set SIGNING_P12_BASE64
+```
+
+Downloaded builds aren't notarized. On first launch, allow the app under Privacy & Security ›
+*Open Anyway*, or run `xattr -dr com.apple.quarantine /Applications/tingjian.app`.
+
 ### Permissions
 
 | What | When | Where |
