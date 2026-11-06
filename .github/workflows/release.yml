@@ -4,17 +4,23 @@ name: Release
 # identity (secret SIGNING_P12_BASE64, see scripts/make-signing-identity.sh) and
 # attaches the zipped app to a GitHub release.
 #
-#   git tag v0.2.0 && git push origin v0.2.0      release that tag
-#   Actions › Release › Run workflow               release / dry-run any commit
+#   scripts/release.sh patch                       tag the next version locally (pushes the tag)
+#   git tag v0.2.0 && git push origin v0.2.0       release a tag you made yourself
+#   Actions › Release › Run workflow               pick patch / minor / major / custom here
 
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
+      bump:
+        description: "Version bump from the latest v* tag (custom uses the version below)"
+        type: choice
+        options: [patch, minor, major, custom]
+        default: patch
       version:
-        description: "Version, e.g. 0.2.0 (tags v<version> on the selected branch's head)"
-        required: true
+        description: "Exact version for custom, e.g. 0.4.0-beta"
+        required: false
       dry_run:
         description: "Build and upload a workflow artifact only; don't publish a release"
         type: boolean
@@ -38,14 +44,27 @@ jobs:
       - name: Resolve version
         id: version
         env:
+          BUMP: ${{ inputs.bump }}
           INPUT_VERSION: ${{ inputs.version }}
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             TAG="$GITHUB_REF_NAME"
+            [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]] || { echo "::error::bad version tag '$TAG'"; exit 1; }
+            LAST="(tag pushed)"
           else
-            TAG="v${INPUT_VERSION#v}"
+            if [[ "$BUMP" == custom ]]; then
+              [[ -n "$INPUT_VERSION" ]] || { echo "::error::bump is custom but no version was given"; exit 1; }
+              ARG="$INPUT_VERSION"
+            else
+              ARG="$BUMP"
+            fi
+            # Same rules as scripts/release.sh: no going backwards, no reusing a tag.
+            OUT=$(scripts/next-version.sh "$ARG") || { echo "::error::$(scripts/next-version.sh "$ARG" 2>&1)"; exit 1; }
+            read -r NEXT LAST <<< "$OUT"
+            TAG="v$NEXT"
+            [[ "$LAST" == - ]] && LAST="none" || LAST="v$LAST"
           fi
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]] || { echo "::error::bad version '$TAG'"; exit 1; }
+          echo "Releasing $TAG (last release: $LAST)" | tee -a "$GITHUB_STEP_SUMMARY"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 

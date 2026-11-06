@@ -32,30 +32,11 @@ git fetch -q --tags origin main
 [[ "$(git rev-parse HEAD)" == "$(git rev-parse origin/main)" ]] \
   || die "main isn't in sync with origin/main (push or pull first)"
 
-# Latest release tag by version order (not by date), ignoring the v prefix.
-LAST=$(git -c versionsort.suffix=- tag -l 'v*' --sort=-v:refname | head -1)
-LAST=${LAST#v}
-BASE=${${LAST:-0.0.0}%%-*}   # drop any pre-release suffix
-IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
-
-case $BUMP in
-  patch)
-    # After a pre-release (0.3.0-beta), "patch" ships it as 0.3.0.
-    if [[ $LAST == *-* ]]; then NEXT=$BASE; else NEXT="$MAJOR.$MINOR.$((PATCH + 1))"; fi ;;
-  minor) NEXT="$MAJOR.$((MINOR + 1)).0" ;;
-  major) NEXT="$((MAJOR + 1)).0.0" ;;
-  *)
-    [[ $BUMP =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([.-].+)?$ ]] || die "expected patch, minor, major or x.y.z, got '$BUMP'"
-    NEXT=${BUMP#v}
-    ;;
-esac
+read -r NEXT LAST < <(scripts/next-version.sh "$BUMP") || exit 1
+[[ $LAST == - ]] && LAST=""
 TAG="v$NEXT"
-git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && die "$TAG already exists"
 
 if [[ -n $LAST ]]; then
-  # Refuse to go backwards (pre-releases of the same base are fine).
-  LOWEST=$(printf '%s\n' "${LAST%%-*}" "${NEXT%%-*}" | sort -V | head -1)
-  [[ $LOWEST == "${LAST%%-*}" ]] || die "$NEXT is lower than the last release $LAST"
   COMMITS=$(git rev-list --count "v$LAST"..HEAD)
   echo "Last release:  v$LAST ($COMMITS commits since)"
 else

@@ -89,7 +89,8 @@ scripts/release.sh patch      # or minor / major / an explicit 0.4.0-beta; -n sh
 
 It checks that `main` is clean and pushed, works out the next version from the latest `v*` tag,
 and then tags and pushes it, which triggers the workflow. Alternatively, use *Actions › Release ›
-Run workflow* with a version.
+Run workflow* and pick *patch*, *minor*, *major*, or *custom* with an exact version. Both paths use
+`scripts/next-version.sh`, so they follow the same rules: no lower or already-used versions.
 
 The version is only the tag: `bundle.sh` writes it to `CFBundleShortVersionString`, and the
 commit count becomes `CFBundleVersion`. The menu shows the version next to the name; hover it
