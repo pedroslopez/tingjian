@@ -117,8 +117,16 @@ struct MenuView: View {
                 .labelsHidden()
                 .frame(width: 190)
             }
-            Toggle("Show Chinese", isOn: $model.showChinese)
-                .toggleStyle(.switch).controlSize(.small)
+            HStack {
+                Text("Chinese")
+                Spacer()
+                Picker("Chinese", selection: $model.chineseDisplay) {
+                    ForEach(ChineseDisplay.allCases) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 190)
+            }
             HStack {
                 Text("Lines")
                 Spacer()

@@ -23,7 +23,8 @@ A personal macOS menu bar app that listens to everything (system audio, plus the
 - Menu bar icon pulses while listening.
 - Overlay sits at the bottom center: big English line, small Chinese above it, older lines fade out. The live line is dim and turns solid when final.
 - Drag to move; the overlay remembers its position.
-- Menu: source (system / mic / both), show or hide the Chinese, session history (copyable).
+- Menu: source (system / mic / both), Chinese line as 汉字 / pinyin / off, session history (copyable).
+- Drag: hold ⌘ over the subtitles and drag.
 
 ## Build & run
 

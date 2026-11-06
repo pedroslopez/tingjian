@@ -37,7 +37,7 @@ struct OverlayView: View {
                 ForEach(Array(lines.enumerated()), id: \.element.id) { index, line in
                     SubtitleLine(
                         line: line,
-                        showChinese: model.showChinese,
+                        chineseDisplay: model.chineseDisplay,
                         textSize: model.textSize,
                         age: lines.count - 1 - index
                     )
@@ -92,18 +92,18 @@ struct OverlayView: View {
 
 private struct SubtitleLine: View {
     let line: Transcript.Line
-    let showChinese: Bool
+    let chineseDisplay: ChineseDisplay
     let textSize: Double
     /// 0 = newest.
     let age: Int
 
     var body: some View {
         VStack(spacing: 3) {
-            if showChinese {
-                Text(line.chinese)
-                    .font(.system(size: textSize * 0.6, weight: .medium))
+            if let source = sourceText {
+                Text(source)
+                    .font(.system(size: textSize * (chineseDisplay == .pinyin ? 0.56 : 0.6), weight: .medium))
                     .foregroundStyle(.white.opacity(0.72))
-                    .lineLimit(1)
+                    .lineLimit(chineseDisplay == .pinyin ? 2 : 1)
                     .truncationMode(.head)
             }
             Text(line.english.isEmpty ? "…" : line.english)
@@ -119,6 +119,14 @@ private struct SubtitleLine: View {
         .opacity(opacity)
         .scaleEffect(age == 0 ? 1 : 0.96)
         .frame(maxWidth: .infinity)
+    }
+
+    private var sourceText: String? {
+        switch chineseDisplay {
+        case .hanzi: line.chinese
+        case .pinyin: Pinyin.romanize(line.chinese)
+        case .hidden: nil
+        }
     }
 
     private var opacity: Double {

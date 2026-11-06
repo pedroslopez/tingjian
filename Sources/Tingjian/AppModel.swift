@@ -26,6 +26,21 @@ enum SourceMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// What to show above the English line.
+enum ChineseDisplay: String, CaseIterable, Identifiable {
+    case hanzi, pinyin, hidden
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .hanzi: "汉字"
+        case .pinyin: "Pinyin"
+        case .hidden: "Off"
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -57,7 +72,7 @@ final class AppModel {
             if sourceMode != oldValue, isListening { Task { await restart() } }
         }
     }
-    var showChinese: Bool { didSet { defaults.set(showChinese, forKey: Keys.showChinese) } }
+    var chineseDisplay: ChineseDisplay { didSet { defaults.set(chineseDisplay.rawValue, forKey: Keys.chineseDisplay) } }
     var textSize: Double { didSet { defaults.set(textSize, forKey: Keys.textSize) } }
     var visibleLineCount: Int { didSet { defaults.set(visibleLineCount, forKey: Keys.visibleLineCount) } }
 
@@ -72,7 +87,8 @@ final class AppModel {
 
     private enum Keys {
         static let sourceMode = "sourceMode"
-        static let showChinese = "showChinese"
+        static let showChinese = "showChinese"  // legacy Bool
+        static let chineseDisplay = "chineseDisplay"
         static let textSize = "textSize"
         static let visibleLineCount = "visibleLineCount"
     }
@@ -81,7 +97,8 @@ final class AppModel {
         self.translator = translator
         transcript = Transcript(translator: translator)
         sourceMode = SourceMode(rawValue: defaults.string(forKey: Keys.sourceMode) ?? "") ?? .system
-        showChinese = defaults.object(forKey: Keys.showChinese) as? Bool ?? true
+        chineseDisplay = ChineseDisplay(rawValue: defaults.string(forKey: Keys.chineseDisplay) ?? "")
+            ?? (defaults.object(forKey: Keys.showChinese) as? Bool == false ? .hidden : .hanzi)
         textSize = defaults.object(forKey: Keys.textSize) as? Double ?? 26
         visibleLineCount = defaults.object(forKey: Keys.visibleLineCount) as? Int ?? 3
         transcript.onLineChange = { line in
