@@ -83,10 +83,16 @@ signing, which resets grants on every build. Regenerate the app icon with
 `tingjian-<version>-macos-arm64.zip` (plus its SHA-256) to a GitHub release:
 
 ```sh
-git tag v0.2.0 && git push origin v0.2.0
+scripts/release.sh patch      # or minor / major / an explicit 0.4.0-beta; -n shows what it would do
 ```
 
-Or use *Actions › Release › Run workflow* with a version. Tick *dry run* there to only build
+It checks that `main` is clean and pushed, works out the next version from the latest `v*` tag,
+and then tags and pushes it, which triggers the workflow. Alternatively, use *Actions › Release ›
+Run workflow* with a version.
+
+The version is only the tag: `bundle.sh` writes it to `CFBundleShortVersionString`, and the
+commit count becomes `CFBundleVersion`. The menu shows the version next to the name; hover it
+to see the build number. Tick *dry run* there to only build
 and upload the zip as a workflow artifact.
 
 CI signs with the same self-signed identity as local builds, so permission grants carry over

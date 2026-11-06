@@ -31,6 +31,12 @@ struct MenuView: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text("听见").font(.system(size: 17, weight: .semibold))
             Text("tingjian").font(.system(size: 13)).foregroundStyle(.secondary)
+            if let version = AppVersion.current {
+                Text(version.short)
+                    .font(.system(size: 11, design: .rounded))
+                    .foregroundStyle(.tertiary)
+                    .help("Build \(version.build)")
+            }
             Spacer()
             HStack(spacing: 5) {
                 Circle().fill(statusColor).frame(width: 7, height: 7)
@@ -284,4 +290,17 @@ private struct HistoryRow: View {
         .onHover { hovering = $0 }
         .help("Click to copy")
     }
+}
+
+/// The bundle's version, set by scripts/bundle.sh from the release tag.
+/// Absent when running unbundled (swift run).
+struct AppVersion {
+    let short: String
+    let build: String
+
+    static let current: AppVersion? = {
+        guard let info = Bundle.main.infoDictionary,
+              let short = info["CFBundleShortVersionString"] as? String else { return nil }
+        return AppVersion(short: short, build: info["CFBundleVersion"] as? String ?? "?")
+    }()
 }
