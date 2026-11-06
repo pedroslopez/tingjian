@@ -1,30 +1,66 @@
+<p align="center"><img src="docs/icon.png" width="128" alt="tingjian icon"></p>
+
 # tingjian 听见
 
 A personal macOS menu bar app that listens to everything (system audio, plus the mic if enabled) and shows live translation into English from **Mandarin**, **Spanish (Latin America)** or **French** (picked in the menu) in a sleek floating overlay. Everything runs **locally**.
 
-## Stack
+![tingjian translating a Mandarin news clip, with the menu open](docs/hero.jpg)
 
-| Layer | Choice |
-|---|---|
-| App shell | Swift + SwiftUI `MenuBarExtra`, `LSUIElement` (no Dock icon) |
-| Audio capture | Core Audio process taps (`CATapDescription` / aggregate device) for system audio + optional `AVAudioEngine` mic |
-| ASR | Apple `SpeechAnalyzer` + `SpeechTranscriber` (`zh-CN`), volatile results for live partials |
-| Translation | Apple `Translation` framework, `TranslationSession(installedSource:target:)` zh→en, high-fidelity strategy on 26.4+ |
-| Overlay | Non-activating floating `NSPanel`, all Spaces, click-through, vibrancy |
-| Trigger | Menu bar click or global hotkey (default ⌥⌘T) |
+## What it looks like
 
-## Fallbacks (behind protocols)
+The subtitles sit at the bottom of the screen above everything, full-screen video included. The newest line is at the bottom, and older lines fade out. A line stays dim while the speaker is mid-sentence and turns solid once it's final.
 
-- **ASR:** sherpa-onnx streaming Paraformer zh-en, or WhisperKit large-v3-turbo.
-- **Translation:** local LLM via MLX (e.g. Qwen3 ~8B) with rolling context.
+**Mandarin**, with the characters above the English:
 
-## UX
+![Mandarin subtitles](docs/overlay-mandarin.png)
 
-- Menu bar icon pulses while listening.
-- Overlay sits at the bottom center: big English line, small Chinese above it, older lines fade out. The live line is dim and turns solid when final.
-- Drag to move; the overlay remembers its position.
-- Menu: source (system / mic / both), original line on or off (Mandarin: 汉字 / pinyin / off), session history (copyable).
-- Drag: hold ⌘ over the subtitles and drag.
+**Mandarin with pinyin** instead of characters:
+
+![Mandarin subtitles with pinyin](docs/overlay-pinyin.png)
+
+**Spanish (Latin America):**
+
+![Spanish subtitles](docs/overlay-spanish.png)
+
+**French:**
+
+![French subtitles](docs/overlay-french.png)
+
+## Examples
+
+Real output from `tingjian-cli file`, using clips spoken by the macOS voices:
+
+| Language | Heard | Shown |
+|---|---|---|
+| Mandarin | 大家好，欢迎收看今天的新闻，今天北京的天气晴朗，气温20度， | Hello, everyone. Welcome to today's news. Today's weather in Beijing is sunny with a temperature of 20 degrees. |
+| Mandarin | 我们先来看一下国际新闻。 | Let's take a look at international news first. |
+| Mandarin | 昨天联合国召开了一次关于气候变化的会议，很多国家的领导人都参加了 | Yesterday, the United Nations held a meeting on climate change, and leaders from many countries attended. |
+| Spanish | Hoy vamos a hablar de la economía en México. | Today we are going to talk about the economy in Mexico. |
+| Spanish | La inflación bajó a 3.5% este mes y el peso se mantiene estable frente al dólar. | Inflation fell to 3.5% this month and the peso remains stable against the dollar. |
+| French | Bonsoir et bienvenue, les températures à Paris ont atteint un record cette semaine. | Good evening and welcome, temperatures in Paris have reached a record this week. |
+
+Mandarin and Spanish recognition was accurate in testing. French recognition is the weakest: with the macOS voices it misheard some words (*climat* → *cinéma*, *35* → *25*). Real speech may do better.
+
+As the speaker talks, the live line and its translation keep updating (`tingjian-cli` output):
+
+```
+[  2.44s] live  大家好  →  hello, everyone
+[  3.72s] live  大家好，欢迎收  →  Hello, everyone. Welcome to receive.
+[  4.70s] live  大家好，欢迎收看今天的  →  Hello, everyone. Welcome to watch today's
+[  5.75s] live  大家好，欢迎收看今天的新闻，今天  →  Hello, everyone. Welcome to watch today's news. Today
+[  7.80s] live  大家好，欢迎收看今天的新闻，今天北京的天气晴朗  →  Hello, everyone. Welcome to today's news. The weather in Beijing is sunny today.
+```
+
+## Using it
+
+- **Start / stop:** menu bar icon › *Start listening*, or **⌥⌘T** anywhere.
+- **Language:** the *Language* dropdown in the menu. The row below it shows or hides the original text; for Mandarin it can also show pinyin.
+- **Source:** *System* (everything playing on the Mac), *Mic*, or *Both*.
+- **Move the overlay:** hold **⌘** over the subtitles and drag. A dashed outline shows it's draggable. *Reset overlay* puts it back.
+- **History:** the menu lists this session's lines. Click one to copy it, or use *Copy all*.
+- **Dock:** tick *Show in Dock* for a Dock icon. Clicking it opens the controls in a window, and right-clicking it gives Start/Stop.
+- **Scripting:** `open build/tingjian.app --args --start` starts listening on launch. Posting the distributed notification `com.pedroslopez.tingjian.toggle` toggles it.
+- **Logs:** `log stream --predicate 'subsystem == "com.pedroslopez.tingjian"' --info`
 
 ## Build & run
 
@@ -35,17 +71,11 @@ scripts/make-signing-identity.sh   # once: self-signed identity in its own keych
 scripts/bundle.sh --run            # build/tingjian.app, (re)launch it
 ```
 
-`bundle.sh` signs with the local identity so the designated requirement
+`bundle.sh` signs with the local identity, so the designated requirement
 (`identifier "com.pedroslopez.tingjian" and certificate leaf = …`) is stable and
 privacy grants survive rebuilds. Without the identity it falls back to ad hoc
-signing, which resets grants on every build.
-
-- **Toggle:** menu bar icon › Start listening, or **⌥⌘T** anywhere.
-- **Dock:** tick *Show in Dock* in the menu to also get a Dock icon. Clicking it opens the controls in a window; right-click it for Start/Stop. Regenerate the icon with `swift scripts/make-icon.swift`.
-- **Move the overlay:** hold **⌘**, then drag the subtitles. *Reset overlay position* is in the menu.
-- **Scripting:** `open build/tingjian.app --args --start` starts listening on launch. Posting the
-  distributed notification `com.pedroslopez.tingjian.toggle` toggles it.
-- **Logs:** `log stream --predicate 'subsystem == "com.pedroslopez.tingjian"' --info`
+signing, which resets grants on every build. Regenerate the app icon with
+`swift scripts/make-icon.swift`.
 
 ### Permissions
 
@@ -58,9 +88,9 @@ No Accessibility or Screen Recording permission is needed; the hotkey uses Carbo
 `RegisterEventHotKey`. If the overlay only says "Only silence so far" while audio is
 playing, the System Audio Recording grant is missing.
 
-Models (on-device, one-time): the speech model for the selected language (zh-CN, es-MX, fr-FR) downloads
-automatically on first start. The translation model (zh-Hans, es, fr → en) must be installed under System Settings ›
-General › Language & Region › Translation Languages.
+Models (on-device, one-time): the speech model for the selected language (zh-CN, es-MX, fr-FR)
+downloads automatically on first start. The translation model (zh-Hans, es, fr → en) must be
+installed under System Settings › General › Language & Region › Translation Languages.
 
 ### CLI
 
@@ -73,9 +103,31 @@ General › Language & Region › Translation Languages.
 
 Quick test: `say -v Tingting -o /tmp/zh.aiff "今天天气很好。" && swift run tingjian-cli file /tmp/zh.aiff`
 
+## Stack
+
+| Layer | Choice |
+|---|---|
+| App shell | Swift + SwiftUI `MenuBarExtra`, `LSUIElement` (optional Dock icon) |
+| Audio capture | Core Audio process taps (`CATapDescription` / aggregate device) for system audio + optional `AVAudioEngine` mic |
+| ASR | Apple `SpeechAnalyzer` + `SpeechTranscriber` (zh-CN, es-MX, fr-FR), volatile results for live partials |
+| Translation | Apple `Translation` framework, `TranslationSession(installedSource:target:)` → en, high-fidelity strategy |
+| Overlay | Non-activating floating `NSPanel`, all Spaces, click-through, glass background |
+| Trigger | Menu bar, Dock, or global hotkey ⌥⌘T |
+
+Recognizer text is split into subtitle-sized sentences. Partial lines are translated on a
+throttle, and final lines are translated once more definitively. Settled sentences are cached,
+so they aren't re-translated on every update.
+
+### Fallbacks (behind protocols)
+
+- **ASR:** sherpa-onnx streaming Paraformer zh-en, or WhisperKit large-v3-turbo.
+- **Translation:** local LLM via MLX (e.g. Qwen3 ~8B) with rolling context.
+
 ## Layout
 
 - `Sources/TingjianCore`: audio sources (process tap, mic, file), `SpeechRecognizer` / `Translator`
-  protocols plus the Apple implementations, sentence segmentation, `Transcript`, and `ListeningSession`.
+  protocols plus the Apple implementations, languages, sentence segmentation, `Transcript`, and `ListeningSession`.
 - `Sources/Tingjian`: the menu bar app (model, overlay panel, menu, hotkey).
 - `Sources/tingjian-cli`: the feasibility check and headless runs.
+- `scripts/`: bundling, signing identity, icon.
+- `docs/`: README images.
