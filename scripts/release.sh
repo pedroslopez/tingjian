@@ -33,7 +33,7 @@ git fetch -q --tags origin main
   || die "main isn't in sync with origin/main (push or pull first)"
 
 # Latest release tag by version order (not by date), ignoring the v prefix.
-LAST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+LAST=$(git -c versionsort.suffix=- tag -l 'v*' --sort=-v:refname | head -1)
 LAST=${LAST#v}
 BASE=${${LAST:-0.0.0}%%-*}   # drop any pre-release suffix
 IFS=. read -r MAJOR MINOR PATCH <<< "$BASE"
