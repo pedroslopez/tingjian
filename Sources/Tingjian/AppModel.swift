@@ -91,6 +91,22 @@ final class AppModel {
     var originalDisplay: OriginalDisplay { didSet { defaults.set(originalDisplay.rawValue, forKey: Keys.originalDisplay) } }
     var textSize: Double { didSet { defaults.set(textSize, forKey: Keys.textSize) } }
     var visibleLineCount: Int { didSet { defaults.set(visibleLineCount, forKey: Keys.visibleLineCount) } }
+    /// Global shortcut that toggles listening; nil means none.
+    var shortcut: Shortcut? {
+        didSet {
+            guard shortcut != oldValue else { return }
+            if !registerShortcut() {
+                let taken = shortcut?.display ?? ""
+                shortcut = oldValue   // re-enters didSet and re-registers the old one
+                shortcutError = "\(taken) is reserved by macOS. Pick another shortcut."
+                return
+            }
+            shortcutError = nil
+            // Stored as JSON; an explicit `null` means "no hotkey" (vs. never set → default).
+            if let data = try? JSONEncoder().encode(shortcut) { defaults.set(data, forKey: Keys.shortcut) }
+        }
+    }
+    private(set) var shortcutError: String?
     /// Also show a Dock icon (the menu bar icon stays).
     var showInDock: Bool {
         didSet {
@@ -103,6 +119,7 @@ final class AppModel {
 
     private let defaults = UserDefaults.standard
     private var translator: Translator
+    private var hotKey: HotKey?
     private var session: ListeningSession?
     private var translatorReady = false
     private var startedAt: Date?
@@ -116,6 +133,7 @@ final class AppModel {
         static let textSize = "textSize"
         static let visibleLineCount = "visibleLineCount"
         static let showInDock = "showInDock"
+        static let shortcut = "shortcut"
     }
 
     init() {
@@ -130,6 +148,13 @@ final class AppModel {
         textSize = defaults.object(forKey: Keys.textSize) as? Double ?? 26
         visibleLineCount = defaults.object(forKey: Keys.visibleLineCount) as? Int ?? 3
         showInDock = defaults.bool(forKey: Keys.showInDock)
+        // Not `try?`: it would flatten a stored `null` (no hotkey) into "unreadable".
+        do {
+            let data = defaults.data(forKey: Keys.shortcut) ?? Data("\"unset\"".utf8)
+            shortcut = try JSONDecoder().decode(Shortcut?.self, from: data)
+        } catch {
+            shortcut = .default
+        }
         transcript.onLineChange = { line in
             guard line.isFinal else { return }
             Self.log.info("[\(line.source.rawValue, privacy: .public)] \(line.original, privacy: .public) → \(line.english, privacy: .public)")
@@ -232,6 +257,42 @@ final class AppModel {
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    // MARK: Hotkey
+
+    func installHotKey() {
+        let hotKey = HotKey { [weak self] in
+            Task { @MainActor in self?.toggle() }
+        }
+        self.hotKey = hotKey
+        if !registerShortcut() {
+            shortcutError = "\(shortcut?.display ?? "") is reserved by macOS. Pick another shortcut."
+        }
+    }
+
+    /// Registers the current shortcut (or none). False if macOS refuses it.
+    private func registerShortcut() -> Bool {
+        guard let hotKey else { return true }
+        guard let shortcut else {
+            hotKey.unregister()
+            return true
+        }
+        return hotKey.register(shortcut)
+    }
+
+    /// While recording a new shortcut, release the current one so pressing it
+    /// records it instead of toggling listening.
+    func suspendHotKey(_ suspended: Bool) {
+        if suspended {
+            hotKey?.unregister()
+        } else if !registerShortcut() {
+            shortcutError = "\(shortcut?.display ?? "") is reserved by macOS. Pick another shortcut."
+        }
+    }
+
+    func resetShortcut() {
+        shortcut = .default
     }
 
     func applyDockPolicy() {

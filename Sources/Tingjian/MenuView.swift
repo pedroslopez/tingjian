@@ -71,7 +71,9 @@ struct MenuView: View {
                 Image(systemName: model.isListening || model.isBusy ? "stop.fill" : "play.fill")
                 Text(model.isListening ? "Stop listening" : model.isBusy ? "Cancel" : "Start listening")
                 Spacer()
-                Text("⌥⌘T").font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
+                if let shortcut = model.shortcut {
+                    Text(shortcut.display).font(.system(size: 11, design: .rounded)).foregroundStyle(.secondary)
+                }
             }
             .font(.system(size: 13, weight: .semibold))
             .padding(.vertical, 4)
@@ -167,6 +169,17 @@ struct MenuView: View {
                 Image(systemName: "textformat.size.smaller").foregroundStyle(.secondary)
                 Slider(value: $model.textSize, in: 16...44)
                 Image(systemName: "textformat.size.larger").foregroundStyle(.secondary)
+            }
+            HStack {
+                Text("Hotkey")
+                Spacer()
+                ShortcutRecorder(model: model)
+            }
+            if let error = model.shortcutError {
+                Text(error)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .font(.system(size: 12))

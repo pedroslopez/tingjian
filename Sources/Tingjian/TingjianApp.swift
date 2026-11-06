@@ -20,15 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
     let iconAnimator = IconAnimator()
     private(set) lazy var overlay = OverlayController(model: model)
-    private var hotKey: HotKey?
     private var controlsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model.applyDockPolicy()
         _ = overlay
-        hotKey = HotKey { [weak self] in
-            Task { @MainActor in self?.model.toggle() }
-        }
+        model.installHotKey()
         iconAnimator.bind(to: model)
 
         // Scriptable toggle (Shortcuts, Raycast, …):

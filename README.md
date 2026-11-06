@@ -54,6 +54,7 @@ As the speaker talks, the live line and its translation keep updating (`tingjian
 ## Using it
 
 - **Start / stop:** menu bar icon › *Start listening*, or **⌥⌘T** anywhere.
+- **Hotkey:** click the shortcut next to *Hotkey* in the menu and press a new one. It needs ⌘, ⌥ or ⌃, unless it's a function key. While recording, ⌫ sets no hotkey and Esc cancels; ✕ clears it and ↺ restores ⌥⌘T. macOS doesn't flag a clash with another app's shortcut, so pick one nothing else uses.
 - **Language:** the *Language* dropdown in the menu. The row below it shows or hides the original text; for Mandarin it can also show pinyin.
 - **Source:** *System* (everything playing on the Mac), *Mic*, or *Both*.
 - **Move the overlay:** hold **⌘** over the subtitles and drag. A dashed outline shows it's draggable. *Reset overlay* puts it back.
@@ -114,8 +115,8 @@ Downloaded builds aren't notarized. On first launch, allow the app under Privacy
 | System Audio Recording | first start with source *System* / *Both* | System Settings › Privacy & Security › Screen & System Audio Recording (*System Audio Recording Only*) |
 | Microphone | first start with source *Mic* / *Both* | Privacy & Security › Microphone |
 
-No Accessibility or Screen Recording permission is needed; the hotkey uses Carbon
-`RegisterEventHotKey`. If the overlay only says "Only silence so far" while audio is
+No Accessibility or Screen Recording permission is needed; the hotkey (default ⌥⌘T) uses
+Carbon `RegisterEventHotKey`. If the overlay only says "Only silence so far" while audio is
 playing, the System Audio Recording grant is missing.
 
 Models (on-device, one-time): the speech model for the selected language (zh-CN, es-MX, fr-FR)
@@ -142,7 +143,7 @@ Quick test: `say -v Tingting -o /tmp/zh.aiff "今天天气很好。" && swift ru
 | ASR | Apple `SpeechAnalyzer` + `SpeechTranscriber` (zh-CN, es-MX, fr-FR), volatile results for live partials |
 | Translation | Apple `Translation` framework, `TranslationSession(installedSource:target:)` → en, high-fidelity strategy |
 | Overlay | Non-activating floating `NSPanel`, all Spaces, click-through, glass background |
-| Trigger | Menu bar, Dock, or global hotkey ⌥⌘T |
+| Trigger | Menu bar, Dock, or a configurable global hotkey (default ⌥⌘T) |
 
 Recognizer text is split into subtitle-sized sentences. Partial lines are translated on a
 throttle, and final lines are translated once more definitively. Settled sentences are cached,
