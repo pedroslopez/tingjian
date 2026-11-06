@@ -21,8 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let iconAnimator = IconAnimator()
     private(set) lazy var overlay = OverlayController(model: model)
     private var hotKey: HotKey?
+    private var controlsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        model.applyDockPolicy()
         _ = overlay
         hotKey = HotKey { [weak self] in
             Task { @MainActor in self?.model.toggle() }
@@ -39,6 +41,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--start") {
             model.toggle()
         }
+    }
+
+    // MARK: Dock
+
+    /// Clicking the Dock icon opens the controls in a regular window.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showControlsWindow()
+        return false
+    }
+
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        let toggle = NSMenuItem(title: model.isListening || model.isBusy ? "Stop Listening" : "Start Listening",
+                                action: #selector(toggleListening), keyEquivalent: "")
+        toggle.target = self
+        menu.addItem(toggle)
+        let controls = NSMenuItem(title: "Show Controls", action: #selector(showControlsFromMenu), keyEquivalent: "")
+        controls.target = self
+        menu.addItem(controls)
+        return menu
+    }
+
+    @objc private func toggleListening() { model.toggle() }
+    @objc private func showControlsFromMenu() { showControlsWindow() }
+
+    func showControlsWindow() {
+        if controlsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 340, height: 520),
+                styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                backing: .buffered, defer: false
+            )
+            window.title = "tingjian"
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
+            window.isMovableByWindowBackground = true
+            window.isReleasedWhenClosed = false
+            let host = NSHostingView(rootView: MenuView(model: model, overlay: overlay).padding(.top, 14))
+            host.sizingOptions = [.preferredContentSize]
+            window.contentView = host
+            window.setFrameAutosaveName("ControlsWindow")
+            if !window.setFrameUsingName("ControlsWindow") { window.center() }
+            controlsWindow = window
+        }
+        NSApp.activate()
+        controlsWindow?.makeKeyAndOrderFront(nil)
     }
 }
 

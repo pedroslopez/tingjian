@@ -91,6 +91,13 @@ final class AppModel {
     var originalDisplay: OriginalDisplay { didSet { defaults.set(originalDisplay.rawValue, forKey: Keys.originalDisplay) } }
     var textSize: Double { didSet { defaults.set(textSize, forKey: Keys.textSize) } }
     var visibleLineCount: Int { didSet { defaults.set(visibleLineCount, forKey: Keys.visibleLineCount) } }
+    /// Also show a Dock icon (the menu bar icon stays).
+    var showInDock: Bool {
+        didSet {
+            defaults.set(showInDock, forKey: Keys.showInDock)
+            applyDockPolicy()
+        }
+    }
 
     // MARK: Private
 
@@ -108,6 +115,7 @@ final class AppModel {
         static let language = "language"
         static let textSize = "textSize"
         static let visibleLineCount = "visibleLineCount"
+        static let showInDock = "showInDock"
     }
 
     init() {
@@ -121,6 +129,7 @@ final class AppModel {
             ?? (defaults.object(forKey: Keys.showChinese) as? Bool == false ? .hidden : .original)
         textSize = defaults.object(forKey: Keys.textSize) as? Double ?? 26
         visibleLineCount = defaults.object(forKey: Keys.visibleLineCount) as? Int ?? 3
+        showInDock = defaults.bool(forKey: Keys.showInDock)
         transcript.onLineChange = { line in
             guard line.isFinal else { return }
             Self.log.info("[\(line.source.rawValue, privacy: .public)] \(line.original, privacy: .public) → \(line.english, privacy: .public)")
@@ -223,6 +232,14 @@ final class AppModel {
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    func applyDockPolicy() {
+        NSApp.setActivationPolicy(showInDock ? .regular : .accessory)
+        if !showInDock {
+            // Dropping to .accessory deactivates us; keep our windows in front.
+            NSApp.activate()
+        }
     }
 
     func openAudioCaptureSettings() {

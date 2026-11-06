@@ -237,9 +237,12 @@ struct MenuView: View {
     // MARK: Footer
 
     private var footer: some View {
-        HStack {
-            Button("Reset overlay position") { overlay.resetPosition() }
+        HStack(spacing: 14) {
+            Toggle("Show in Dock", isOn: $model.showInDock)
+                .toggleStyle(.checkbox)
+            Button("Reset overlay") { overlay.resetPosition() }
                 .buttonStyle(.link)
+                .help("Move the subtitles back to the bottom center of the screen")
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.link)

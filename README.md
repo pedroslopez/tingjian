@@ -41,6 +41,7 @@ privacy grants survive rebuilds. Without the identity it falls back to ad hoc
 signing, which resets grants on every build.
 
 - **Toggle:** menu bar icon › Start listening, or **⌥⌘T** anywhere.
+- **Dock:** tick *Show in Dock* in the menu to also get a Dock icon. Clicking it opens the controls in a window; right-click it for Start/Stop. Regenerate the icon with `swift scripts/make-icon.swift`.
 - **Move the overlay:** hold **⌘**, then drag the subtitles. *Reset overlay position* is in the menu.
 - **Scripting:** `open build/tingjian.app --args --start` starts listening on launch. Posting the
   distributed notification `com.pedroslopez.tingjian.toggle` toggles it.
