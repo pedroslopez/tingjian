@@ -115,7 +115,6 @@ private struct SubtitleLine: View {
                 .foregroundStyle(.white.opacity(line.isFinal ? 1 : 0.58))
                 .lineLimit(2)
                 .truncationMode(.head)
-                .animation(.easeOut(duration: 0.25), value: line.english)
                 .animation(.easeOut(duration: 0.3), value: line.isFinal)
         }
         .multilineTextAlignment(.center)

@@ -83,8 +83,15 @@ public final class Transcript {
             if k < ids.count {
                 guard let i = index(of: ids[k]) else { continue }
                 if lines[i].original != sentence {
+                    let old = lines[i].original
                     lines[i].original = sentence
-                    if let cached = cache[sentence] { lines[i].english = cached }
+                    if let cached = cache[sentence] {
+                        lines[i].english = cached
+                    } else if !Self.continues(sentence, old) {
+                        // Re-split: the line now holds a different sentence, so its
+                        // old translation would be wrong. Blank it until the new one lands.
+                        lines[i].english = ""
+                    }
                     changed.append(ids[k])
                 }
             } else {
@@ -196,6 +203,12 @@ public final class Transcript {
     }
 
     // MARK: - Helpers
+
+    /// Whether `new` is roughly `old` growing or being corrected at its tail.
+    static func continues(_ new: String, _ old: String) -> Bool {
+        let stem = old.prefix(max(1, old.count * 2 / 3))
+        return new.hasPrefix(stem)
+    }
 
     private func newLine(for source: SourceKind, original: String) -> UUID {
         let line = Line(id: UUID(), source: source, startedAt: .now, original: original,
